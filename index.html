@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Jakarta Urban Risk v2.0 | Flood Analytics</title>
+    
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        #map { height: 100vh; width: 100%; }
+        aside::-webkit-scrollbar { width: 5px; }
+        aside::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        .route-danger {
+            background-color: #fef2f2 !important;
+            border: 1px solid #fecaca !important;
+            border-left: 4px solid #ef4444 !important;
+            color: #991b1b !important;
+        }
+
+        .route-safe {
+            background-color: #f0fdf4 !important;
+            border: 1px solid #bbf7d0 !important;
+            border-left: 4px solid #10b981 !important;
+            color: #166534 !important;
+        }
+
+        /* Animasi Pulse untuk Weather */
+        .pulse-red {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body class="overflow-hidden bg-gray-50">
+    <div class="flex h-screen">
+        <aside class="w-[380px] bg-white z-20 shadow-2xl p-5 overflow-y-auto border-r border-gray-200">
+            <h1 class="text-xl font-black mb-6 text-blue-700 border-b-2 border-blue-100 pb-3 tracking-tight flex items-center justify-between">
+                FLOOD ANALYTICS 
+                <span class="bg-blue-600 text-white text-[8px] font-bold px-3 py-2 rounded-full uppercase leading-none text-center shadow-sm">
+            Aksesibilitas Kantor<br>Jakarta Timur
+            </h1>
+            
+            <section id="weather-status" class="mb-6">
+                <div class="p-3 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-center text-[10px] text-gray-400">
+                    Memuat data cuaca real-time...
+                </div>
+            </section>
+            <section id="weather-status" class="mb-4"></section>
+
+            <div id="elevation-chart" class="hidden mt-2 p-2 bg-white border border-dashed rounded-lg">
+        </div>
+
+        <div id="flood-proximity-alert" class="hidden mt-2 p-2 bg-red-50 border border-red-100 rounded text-[10px] font-bold text-red-700">
+</div>
+            <section class="mb-8">
+                <h2 class="font-bold mb-3 text-[10px] uppercase tracking-wider text-gray-400">Basemap Switcher</h2>
+                <div class="grid grid-cols-3 gap-2">
+                    <button onclick="changeStyle('street')" class="p-2 border rounded-lg hover:bg-blue-50 text-[10px] font-bold transition">STREET</button>
+                    <button onclick="changeStyle('satellite')" class="p-2 border rounded-lg hover:bg-blue-50 text-[10px] font-bold transition">SATELLITE</button>
+                    <button onclick="changeStyle('dark')" class="p-2 border rounded-lg hover:bg-blue-50 text-[10px] font-bold transition">DARK</button>
+                    
+                </div>
+            </section>
+            <section class="mb-8 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <h2 class="font-bold mb-3 text-xs uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                    🛣️ Navigasi & Risiko Jalur
+                </h2>
+                <div class="flex flex-col gap-3">
+                    <button 
+                        onclick="enableRouteMode()" 
+                        class="bg-blue-600 text-white p-3 rounded-xl text-xs font-black hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all flex justify-center items-center gap-2"
+                    >
+                        TENTUKAN RUTE JALAN
+                    </button>
+                    
+                    <div id="route-status" class="text-[11px] text-gray-500 leading-relaxed italic p-3 bg-white border rounded-lg">
+                        Klik tombol lalu tentukan titik awal & tujuan di peta.
+                    </div>
+
+                    <div id="elevation-chart" class="hidden mt-2 p-3 bg-white border border-blue-100 rounded-xl shadow-sm">
+                        </div>
+                </div>
+            </section>
+
+            <section class="mb-8">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="font-bold text-xs uppercase tracking-wider text-orange-600">POI & Proximity Analysis</h2>
+                    <div class="flex items-center gap-1 bg-orange-100 px-2 py-1 rounded">
+                        <input type="number" id="input-radius" value="1" min="0.1" step="0.1" class="w-8 bg-transparent text-[10px] font-bold text-orange-700 outline-none">
+                        <span class="text-[9px] font-bold text-orange-700">KM</span>
+                    </div>
+                </div>
+
+                <div id="poi-analysis-panel" class="hidden space-y-3">
+                    <div class="bg-orange-50 p-4 rounded-xl border border-orange-100 shadow-sm">
+                        <div class="grid grid-cols-2 gap-4 mb-3">
+                            <div class="text-center p-2 bg-white rounded-lg border border-orange-100">
+                                <div class="text-[9px] text-gray-400 uppercase">Halte</div>
+                                <div id="stat-halte" class="text-sm font-black text-blue-700">-</div>
+                            </div>
+                            <div class="text-center p-2 bg-white rounded-lg border border-orange-100">
+                                <div class="text-[9px] text-gray-400 uppercase">Stasiun</div>
+                                <div id="stat-stasiun" class="text-sm font-black text-green-700">-</div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center border-t border-orange-200 pt-3">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase">Aksesibilitas</span>
+                            <span id="stat-score" class="text-[9px] font-black px-2 py-1 rounded">...</span>
+                        </div>
+                    </div>
+                    
+                    <div id="flood-proximity-alert" class="hidden p-3 bg-red-50 border border-red-100 rounded-xl">
+                        </div>
+                </div>
+            </section>
+
+            <section class="mb-8">
+                <h2 class="font-bold mb-3 text-[10px] uppercase tracking-wider text-gray-400">Layer Management</h2>
+                <div class="grid grid-cols-1 gap-2">
+                    <label class="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition">
+                        <div class="flex items-center gap-3">
+                            <span class="legend-dot bg-[#6789d0]"></span>
+                            <span class="text-[11px] font-medium">Area Potensi Banjir</span>
+                        </div>
+                        <input type="checkbox" onchange="toggleLayer('banjir-layer')" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    </label>
+                    <label class="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition">
+                        <div class="flex items-center gap-3">
+                            <span class="legend-dot bg-[#4927f3]"></span>
+                            <span class="text-[11px] font-medium">Apartemen</span>
+                        </div>
+                        <input type="checkbox" onchange="toggleLayer('apartemen-layer')" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    </label>
+                    <label class="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition">
+                        <div class="flex items-center gap-3">
+                            <span class="legend-dot bg-[#e11d48]"></span>
+                            <span class="text-[11px] font-medium">Area Perkantoran</span>
+                        </div>
+                        <input type="checkbox" onchange="toggleLayer('kantor-layer')" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    </label>
+                    <label class="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition">
+                        <div class="flex items-center gap-3">
+                            <span class="legend-dot bg-[#FFFF00]"></span>
+                            <span class="text-[11px] font-medium">Area Halte</span>
+                        </div>
+                        <input type="checkbox" onchange="toggleLayer('halte-layer')" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    </label>
+                    <label class="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition">
+                        <div class="flex items-center gap-3">
+                            <span class="legend-dot bg-[#00FF00]"></span>
+                            <span class="text-[11px] font-medium">Area Stasiun</span>
+                        </div>
+                        <input type="checkbox" onchange="toggleLayer('stasiun-layer')" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                </div>
+            </section>
+
+            <footer class="mt-10 pt-5 border-t border-gray-100 text-center">
+                <p class="text-[9px] text-gray-400 font-medium">Created by Arief Fauzy Saptari</p>
+            </footer>
+        </aside>
+
+        <div id="map" class="relative flex-1">
+            <div class="absolute bottom-6 right-6 z-10 bg-white/90 backdrop-blur-md p-2 px-4 rounded-2xl shadow-xl border border-white text-[9px] font-black text-gray-700 uppercase tracking-widest flex items-center gap-2">
+                <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                Live System Ready
+            </div>
+        </div>
+    </div>
+
+    <div id="streetview-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-3xl overflow-hidden w-full max-w-5xl shadow-2xl relative">
+            <div class="p-5 bg-white border-b flex justify-between items-center">
+                <div>
+                    <h3 class="font-black text-gray-800 uppercase text-xs tracking-widest" id="streetview-title">Street View</h3>
+                    <p class="text-[9px] text-gray-400">Ground-level imagery for field verification</p>
+                </div>
+                <button onclick="closeStreetView()" class="bg-gray-100 hover:bg-red-50 hover:text-red-600 w-8 h-8 rounded-full transition-all flex items-center justify-center font-bold">✕</button>
+            </div>
+            <div id="streetview-container" class="aspect-video w-full bg-slate-200">
+                <div id="pano" class="w-full h-full"></div>
+            </div>
+        </div>
+    </div>
+    <div class="absolute bottom-10 right-5 z-[1000]">
+    <button onclick="exportMapLayout()" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl shadow-2xl transition-all active:scale-95 group">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+        </svg>
+        <span class="font-bold text-sm">Export Layout</span>
+    </button>
+</div>
+<div id="map-overlays">
+    <div id="north-arrow" class="absolute top-32 right-8 z-[1000] pointer-events-none text-center">
+        <div class="bg-white/80 p-2 rounded-full shadow-md border border-slate-200">
+            <svg width="30" height="30" viewBox="0 0 100 100">
+                <polygon points="50,5 95,95 50,75 5,95" fill="#1e293b"/>
+                <text x="42" y="45" fill="white" font-weight="bold" font-size="20">N</text>
+            </svg>
+        </div>
+    </div>
+
+    <div id="map-legend" class="absolute bottom-10 right-5 z-[1000] bg-white/90 backdrop-blur-md p-4 rounded-2xl border border-slate-200 shadow-xl w-48">
+        <div class="text-[10px] font-black text-slate-800 uppercase tracking-widest mb-3 border-b pb-1">Legenda Peta</div>
+        <div class="space-y-2">
+            <div class="flex items-center gap-3">
+                <span class="w-4 h-4 rounded bg-red-500/50 border border-red-700"></span>
+                <span class="text-[11px] font-bold text-slate-600">Rawan Banjir</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="w-4 h-4 rounded-full bg-blue-600 shadow-sm"></span>
+                <span class="text-[11px] font-bold text-slate-600">Titik Halte</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="w-4 h-4 rounded-md bg-orange-500 shadow-sm"></span>
+                <span class="text-[11px] font-bold text-slate-600">Apartemen</span>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="absolute bottom-6 left-80 z-[1000]">
+    <button onclick="exportMapToPDF()" 
+            title="Export ke PDF"
+            class="p-2 bg-white/90 backdrop-blur-sm hover:bg-red-50 text-red-600 rounded-lg border border-slate-200 shadow-md transition-all active:scale-90 group">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+    </button>
+</div>
+
+    <script src="app.js"></script>
+</body>
+</html>
