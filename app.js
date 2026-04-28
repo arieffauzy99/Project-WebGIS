@@ -40,7 +40,7 @@ const url_batas = 'https://geoserver.mapid.io/layers_new/get_layer?api_key=30b21
 const url_Kantor = 'https://geoserver.mapid.io/layers_new/get_layer?api_key=30b210cbf8bc423f8dcf75840f95f599&layer_id=69e1b1a30aa92c1c9bb45b6c&project_id=6985f22a2d33abfe649c7ab9';
 const url_Stasiun = 'https://geoserver.mapid.io/layers_new/get_layer?api_key=30b210cbf8bc423f8dcf75840f95f599&layer_id=69e1e82d9bfe4509bedc6a07&project_id=6985f22a2d33abfe649c7ab9';
 
-// Tambahkan ini di dalam script peta kamu
+// script peta
 map.on('mousemove', (e) => {
     const weatherPanel = document.getElementById('weather-status');
     if (weatherPanel) {
@@ -92,10 +92,10 @@ function startClock() {
     update();
 }
 
-// Jalankan fungsi ini
+// Jalankan fungsi
 startClock();
 
-// --- FUNGSI ELEVASI (NEW) ---
+// --- FUNGSI ELEVASI
 async function getElevationProfile(coordinates) {
     const chartContainer = document.getElementById('elevation-chart');
     // Ambil sampling tiap 5 koordinat agar tidak overload
@@ -139,7 +139,7 @@ async function exportMapToPDF() {
     const { jsPDF } = window.jspdf;
     const element = document.body;
     
-    // Sembunyikan elemen yang tidak perlu dicetak (tombol itu sendiri dan navigasi)
+    // Sembunyikan elemen yang tidak perlu 
     const uiElements = document.querySelectorAll('button, .maplibregl-ctrl-top-left');
     uiElements.forEach(el => el.style.opacity = '0');
 
@@ -168,7 +168,7 @@ async function exportMapToPDF() {
     }
 }
 
-// --- FUNGSI PROXIMITY ANALYTICS (NEW) ---
+// --- FUNGSI PROXIMITY ANALYTICS
 function checkFloodProximity(lngLat) {
     const alertBox = document.getElementById('flood-proximity-alert');
     if (!cachedData.banjir) return;
@@ -232,7 +232,7 @@ async function setupLayers() {
             map.addLayer({ id: 'stasiun-layer', type: 'circle', source: 'stasiun-source', paint: { 'circle-color': '#1de17c', 'circle-radius': 6, 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } });
             map.addLayer({ id: 'manual-point-layer', type: 'circle', source: 'manual-point-source', paint: { 'circle-color': '#f97316', 'circle-radius': 8, 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } });
         }
-        updateWeather(); // Jalankan Cuaca setelah layer siap
+        updateWeather(); // Jalankan Cuaca
     } catch (err) { console.error("Gagal memuat data:", err); }
 }
 
@@ -282,7 +282,7 @@ window.openStreetView = (lng, lat, title) => {
     modal.classList.remove('hidden');
 
     // Karena API Key Google Maps berbayar/harus daftar, 
-    // Kita arahkan user untuk membuka koordinat langsung di Google Street View resmi
+    // Kita membuka koordinat langsung di Google Street View 
     container.innerHTML = `
         <div class="flex flex-col items-center justify-center h-full p-8 text-center bg-slate-50">
             <div class="bg-blue-100 p-4 rounded-full mb-4">
